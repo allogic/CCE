@@ -1,58 +1,89 @@
-#pragma once
+﻿#pragma once
 
-#include <windows.h>
+#include <Core.h>
 
-template<SHORT Width, SHORT Height>
-struct View
+struct View : std::vector<CHAR_INFO>
 {
-  HANDLE     hBuffer{};
-  CHAR_INFO  ciBuffer[Width * Height]{};
-  SMALL_RECT writeRect{};
+  HANDLE mHdlStdOut{};
+  HANDLE mHdlBuffer{};
+  USHORT mX        {};
+  USHORT mY        {};
+  USHORT mWidth    {};
+  USHORT mHeight   {};
+  UINT   mSize     {};
 
-  View(HANDLE hStdOut, SHORT x, SHORT y);
+  View(USHORT x, USHORT y, USHORT width, USHORT height);
   virtual ~View();
 
-  void SetFrame();
-
-  void Blit();
+  virtual void SetFrame();
+  virtual void SetText(USHORT x, USHORT y, std::wstring const& str);
+  virtual void Update();
+  virtual void Draw();
 };
 
-template<SHORT Width, SHORT Height>
-View<Width, Height>::View(HANDLE hStdOut, SHORT x, SHORT y)
+View::View(USHORT x, USHORT y, USHORT width, USHORT height)
+  : mHdlStdOut{ GetStdHandle(STD_OUTPUT_HANDLE) }
+  , mX{ x }
+  , mY{ y }
+  , mWidth{ width }
+  , mHeight{ height }
+  , mSize{ (UINT)width * height }
 {
-  hBuffer = CreateConsoleScreenBuffer(
-    GENERIC_READ,
-    FILE_SHARE_READ,
-    nullptr,
-    CONSOLE_TEXTMODE_BUFFER,
-    nullptr
-  );
-  writeRect = { x, y, x + Width, y + Height };
+  this->resize(mSize);
+  for (UINT i{}; i < (UINT)mSize; i++)
+    (*this)[i].Char.UnicodeChar = L' ';
 }
-template<SHORT Width, SHORT Height>
-View<Width, Height>::~View()
+
+View::~View()
 {
   
 }
 
-template<SHORT Width, SHORT Height>
-void View<Width, Height>::SetFrame()
+void View::SetFrame()
 {
-  for (SHORT i{}; i < Width; i++)
-    for (SHORT j{}; j < Height; j++)
+  for (USHORT i{}; i < mWidth; i++)
+    for (USHORT j{}; j < mHeight; j++)
     {
-      ciBuffer[i + j * Width].Char = { .AsciiChar{ '.' } };
+      UINT idx{ (UINT)i + j * mWidth };
+
+      (*this)[idx].Attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+
+      if (i == 0 || i == mWidth - 1)           (*this)[idx].Char.UnicodeChar = L'│';
+      if (j == 0 || j == mHeight - 1)          (*this)[idx].Char.UnicodeChar = L'─';
+      if (i == 0 && j == 0)                    (*this)[idx].Char.UnicodeChar = L'┌';
+      if (i == 0 && j == mHeight - 1)          (*this)[idx].Char.UnicodeChar = L'└';
+      if (i == mWidth - 1 && j == 0)           (*this)[idx].Char.UnicodeChar = L'┐';
+      if (i == mWidth - 1 && j == mHeight - 1) (*this)[idx].Char.UnicodeChar = L'┘';
     }
 }
 
-template<SHORT Width, SHORT Height>
-void View<Width, Height>::Blit()
+void View::SetText(USHORT x, USHORT y, std::wstring const& str)
 {
+  USHORT size = std::min<USHORT>(mWidth, (USHORT)str.size());
+
+  for (USHORT i{}; i < size; i++)
+  {
+    UINT idx{ (UINT)(x + i) + y * mWidth };
+
+    (*this)[idx].Attributes       = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    (*this)[idx].Char.UnicodeChar = str[i];
+  }
+}
+
+void View::Update()
+{
+
+}
+
+void View::Draw()
+{
+  SMALL_RECT rect{ (SHORT)mX, (SHORT)mY, (SHORT)(mX + mWidth), (SHORT)(mY + mHeight) };
+
   WriteConsoleOutput(
-    hBuffer,
-    ciBuffer,
-    COORD{ Width, Height },
+    mHdlStdOut,
+    this->data(),
+    COORD{ (SHORT)mWidth, (SHORT)mHeight },
     COORD{ 0, 0 },
-    &writeRect
+    &rect
   );
 }

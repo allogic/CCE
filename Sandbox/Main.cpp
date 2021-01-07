@@ -1,74 +1,32 @@
-#include <windows.h>
+#include <Console.h>
+#include <ViewManager.h>
 
-#include <cstdio>
-#include <cassert>
-#include <regex>
-
-#include "View.h"
-
-HANDLE hStdIn{};
-HANDLE hStdOut{};
-
-CONSOLE_SCREEN_BUFFER_INFO csbInfo{};
-
-WORD attrOld{};
-
-DWORD cWritten{};
-DWORD cRead{};
-
-CHAR cBuffer[1024]{};
-
-DWORD fdModeDraw{};
-DWORD fdModeRead{};
-DWORD fdModeOld{};
-
-struct ProcessView : View<32, 16>
-{
-  ProcessView(HANDLE hStdOut) : View(hStdOut, 8, 4) {}
-};
-
-void SetDrawMode()
-{
-  SetConsoleMode(hStdIn, fdModeDraw);
-}
-void SetReadMode()
-{
-  SetConsoleMode(hStdIn, fdModeRead);
-}
+#include <Views/ProcessView.h>
+#include <Views/CommandView.h>
 
 INT main()
 {
-  hStdIn = GetStdHandle(STD_INPUT_HANDLE);
-  hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+  Console console{};
 
-  GetConsoleScreenBufferInfo(hStdOut, &csbInfo);
+  ViewManager viewManager{};
 
-  attrOld = csbInfo.wAttributes;
-
-  GetConsoleMode(hStdIn, &fdModeOld);
-
-  fdModeDraw = fdModeOld & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-  fdModeRead = fdModeOld;
-
-  SetDrawMode();
-
-  ProcessView processView{ hStdOut };
-  processView.SetFrame();
+  viewManager.Add<ProcessView>("p", (USHORT)4, (USHORT)2, (USHORT)32, (USHORT)8);
+  viewManager.Add<CommandView>("c", (USHORT)0, (USHORT)(console.Height() - 2), (USHORT)(console.Width() + 1), (USHORT)3);
 
   while (1)
   {
-    //WriteFile(hStdOut, "", 0, &cWritten, nulptr);
+    console.Update();
 
-    processView.Blit();
+    auto const cmd{ console.Command() };
 
-    ReadFile(hStdIn, cBuffer, 1023, &cRead, nullptr);
+    viewManager.Update();
+    viewManager.Draw();
 
-    if (cBuffer[0] == ':') break;
+    if (cmd[0] == ':')
+    {
+      break;
+    }
   }
-
-  SetConsoleMode(hStdIn, fdModeOld);
-
-  SetConsoleTextAttribute(hStdOut, attrOld);
 
   return 0;
 }
